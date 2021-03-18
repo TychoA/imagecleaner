@@ -1,3 +1,8 @@
+# Script for iterating over a given directory, and removing images that are similar
+# to images inside it.
+#
+# Author: Tycho Atsma <tycho.atsma@gmail.com>
+
 # Dependencies
 import os, sys, threading, cv2
 from skimage.metrics import mean_squared_error as mse
