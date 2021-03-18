@@ -1,54 +1,72 @@
+# Dependencies
+import os, sys, threading, cv2
 from skimage.metrics import mean_squared_error as mse
-import cv2
-import os
-from collections import namedtuple
-import sys
-from time import time
-import threading
+from PIL import Image
+import numpy as np
 
-Similarity = namedtuple('Similarity', ['imageA', 'imageB', 'similarity'])
-similarities = []
+# Parameters and settings for the script
+source = sys.argv[1]
+threshold = 2000
+batchsize = 5
+image_size = (150, 100)
+
+def image(path):
+    """
+    Function to load an image and convert it to a OpenCV grayscale image.
+
+    Parameters:
+        path: path to image
+
+    Returns:
+        cv2.Image
+    """
+    # Load the image, resize it, and convert to grayscale 
+    img = Image.open(path).resize(image_size, Image.ANTIALIAS)
+    img = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2GRAY)
+
+    # Expose the image
+    return img
+
+# Get all images and convert them into usable properties
+images = ((fp.name, f"{source}/{fp.name}") for fp in os.scandir(source))
+images = [(name, image(path)) for (name, path) in images]
 
 class ImageBatch(threading.Thread):
+    """
+    Class for creating a thread that processes a batch of images and decides
+    to remove images based on their similarity with other images.
+    """
+
     def __init__(self, images):
         threading.Thread.__init__(self)
         self.images = images
 
     def run(self):
-        print('start thread')
-        images = self.images
-        images = [(name, cv2.imread(path)) for (name, path) in images]
-        images = [(name, cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)) for (name, image) in images]
-
         # And iterate over all images
-        for (i, (nameA, imageA)) in enumerate(images):
+        for (i, (nameA, imageA)) in enumerate(self.images):
             for (y, (nameB, imageB)) in enumerate(images):
 
                 # Skip the same images, those will always be equal
-                if i == y:
+                if nameA == nameB:
                     continue
 
-                # Calculate the similarity
-                similarities.append(Similarity(nameA, nameB, mse(imageA, imageB)))
+                # Remove the image if its too similar
+                if mse(imageA, imageB) < threshold:
 
-source = sys.argv[1]
-start = time()
+                    # Remove the file if it exists
+                    fp = f"{source}/{nameB}"
+                    if os.path.isfile(fp):
+                        print('remove', nameA, nameB)
+                        os.remove(fp)
 
-# Get all images and convert them into usable properties
-images = [(fp.name, f"{source}/{fp.name}") for fp in os.scandir(source)]
-
-batchsize = 30
-batches = [images[i * batchsize:(i+1) * batchsize] for i in range((len(images) + batchsize - 1) // batchsize)]
+# Collection of threads and batches to put in threads
 threads = []
+batches = (images[i * batchsize:(i+1) * batchsize] for i in range((len(images) + batchsize - 1) // batchsize))
 
-for (i, batch) in enumerate(batches):
+for batch in batches:
     thread = ImageBatch(batch)
     thread.start()
     threads.append(thread)
 
-print(len(threads))
-
 for thread in threads:
     thread.join()
-
-print((time() - start))
