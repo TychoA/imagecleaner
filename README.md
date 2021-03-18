@@ -11,3 +11,6 @@ Usage:
 ```
 python3 compare.py path_to_image_directory
 ````
+
+Goals:
+- add blur detection
