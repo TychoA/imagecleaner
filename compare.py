@@ -4,16 +4,10 @@
 # Author: Tycho Atsma <tycho.atsma@gmail.com>
 
 # Dependencies
-import os, sys, threading, cv2
+import os, sys, threading, cv2, argparse
 from skimage.metrics import mean_squared_error as mse
 from PIL import Image
 import numpy as np
-
-# Parameters and settings for the script
-source = sys.argv[1]
-threshold = 2000
-batchsize = 5
-image_size = (150, 100)
 
 def image(path):
     """
@@ -26,15 +20,35 @@ def image(path):
         cv2.Image
     """
     # Load the image, resize it, and convert to grayscale 
-    img = Image.open(path).resize(image_size, Image.ANTIALIAS)
+    img = Image.open(path).resize((150, 100), Image.ANTIALIAS)
     img = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2GRAY)
 
     # Expose the image
     return img
 
-# Get all images and convert them into usable properties
-images = ((fp.name, f"{source}/{fp.name}") for fp in os.scandir(source))
-images = [(name, image(path)) for (name, path) in images]
+def blur(image):
+    """
+    Function to calculate the level of blur in an opencv image.
+
+    Parameters:
+        image: opencv image
+
+    Returns:
+        float
+    """
+    return cv2.Laplacian(image, cv2.CV_64F).var()
+
+def remove(path):
+    """
+    Function to remove a file.
+
+    Parameters:
+        path: path of the image
+    """
+    if os.path.isfile(path):
+        os.remove(path)
+        removed.append(path)
+        print(f"Removed {path}")
 
 class ImageBatch(threading.Thread):
     """
@@ -42,36 +56,70 @@ class ImageBatch(threading.Thread):
     to remove images based on their similarity with other images.
     """
 
-    def __init__(self, images):
+    def __init__(self, batch):
+        """
+        Constructor
+
+        Parameters:
+            batch: list of images to compare to all other images.
+        """
         threading.Thread.__init__(self)
-        self.images = images
+        self.batch = batch
 
     def run(self):
-        # And iterate over all images
-        for (i, (nameA, imageA)) in enumerate(self.images):
-            for (y, (nameB, imageB)) in enumerate(images):
+        """
+        Method to execute when the thread has started
+        """
+        for (i, (pathA, imageA)) in enumerate(self.batch):
+            for (y, (pathB, imageB)) in enumerate(images):
 
                 # Skip the same images, those will always be equal
-                if nameA == nameB:
+                if pathA == pathB:
                     continue
 
-                # Remove the image if its too similar
-                if mse(imageA, imageB) < threshold:
+                # Skip if one of them has already been removed
+                if pathA in removed or pathB in removed:
+                    continue
 
-                    # Remove the file if it exists
-                    fp = f"{source}/{nameB}"
-                    if os.path.isfile(fp):
-                        print('remove', nameA, nameB)
-                        os.remove(fp)
+                # Remove an image if its too blurry or too similar
+                if blur(imageA) < blur_threshold:
+                    remove(pathA)
+                elif blur(imageB) < blur_threshold:
+                    remove(pathB)
+                if mse(imageA, imageB) < similarity_threshold:
+                    remove(pathB)
 
-# Collection of threads and batches to put in threads
-threads = []
-batches = (images[i * batchsize:(i+1) * batchsize] for i in range((len(images) + batchsize - 1) // batchsize))
 
-for batch in batches:
-    thread = ImageBatch(batch)
-    thread.start()
-    threads.append(thread)
+# Run as main
+if __name__ == "__main__":
 
-for thread in threads:
-    thread.join()
+    # Set up the cli arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("path", help="Path to the directory of images that need to be processed")
+    parser.add_argument("--similarity", help="Similarity threshold (MSE) below which images are removed (default: 2000)", type=int, default=2000)
+    parser.add_argument("--blur", help="Blur threshold (Laplacian) below which images are removed (default: 150)", type=float, default=150.0)
+    parser.add_argument("--batchsize", help="Number of images to process per batch. Less means more images are processed in parallel. Use with caution, this increases the memory and cpu usage significantly (default: 5).", type=int, default=5)
+
+    # And parse the input
+    args = parser.parse_args()
+    target = args.path
+    batchsize = args.batchsize
+    similarity_threshold = args.similarity
+    blur_threshold = args.blur
+
+    # Get all images and convert them into usable properties
+    images = [(entry.path, image(entry.path)) for entry in os.scandir(target)]
+    removed = []
+
+    # Collection of threads and batches to put in threads
+    batches = (images[i * batchsize:(i+1) * batchsize] for i in range((len(images) + batchsize - 1) // batchsize))
+    threads = []
+
+    for batch in batches:
+        thread = ImageBatch(batch)
+        thread.start()
+        threads.append(thread)
+
+    for thread in threads:
+        thread.join()
+
