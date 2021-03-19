@@ -10,7 +10,6 @@ It can also be used to clean up a directory, e.g. removing duplicates.
 Usage:
 ```
 python3 compare.py path_to_image_directory
-````
 
-Goals:
-- add blur detection
+python3 compare.py --help
+````
