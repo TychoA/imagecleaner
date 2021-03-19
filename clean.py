@@ -20,7 +20,7 @@ def image(path):
         cv2.Image
     """
     # Load the image, resize it, and convert to grayscale 
-    img = Image.open(path).resize((150, 100), Image.ANTIALIAS)
+    img = Image.open(path).resize((300, 200), Image.ANTIALIAS)
     img = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2GRAY)
 
     # Expose the image
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("path", help="Path to the directory of images that need to be processed")
     parser.add_argument("--similarity", help="Similarity threshold (MSE) below which images are removed (default: 2000)", type=int, default=2000)
-    parser.add_argument("--blur", help="Blur threshold (Laplacian) below which images are removed (default: 150)", type=float, default=150.0)
+    parser.add_argument("--blur", help="Blur threshold (Laplacian) below which images are removed (default: 150)", type=float, default=200.0)
     parser.add_argument("--batchsize", help="Number of images to process per batch. Less means more images are processed in parallel. Use with caution, this increases the memory and cpu usage significantly (default: 5).", type=int, default=5)
 
     # And parse the input
